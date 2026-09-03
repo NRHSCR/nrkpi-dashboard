@@ -933,42 +933,42 @@ td.name-cell { font-family: 'Sora', sans-serif; font-weight: 600; font-size: .8r
 
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px">
         <div>
-          <label style="display:block;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:4px">📺 Billboards / Outdoor</label>
+          <label style="display:block;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:4px">🪧 Billboards</label>
           <div style="display:flex;align-items:center;gap:6px">
             <span style="font-family:'DM Mono',monospace;font-size:.85rem;color:var(--muted)">$/mo</span>
             <input type="number" id="cac-budget-billboard" min="0" step="10" placeholder="0" style="flex:1;margin-bottom:0"/>
           </div>
         </div>
         <div>
-          <label style="display:block;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:4px">📱 Social Media Ads</label>
+          <label style="display:block;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:4px">📘 Facebook</label>
           <div style="display:flex;align-items:center;gap:6px">
             <span style="font-family:'DM Mono',monospace;font-size:.85rem;color:var(--muted)">$/mo</span>
-            <input type="number" id="cac-budget-social" min="0" step="10" placeholder="0" style="flex:1;margin-bottom:0"/>
+            <input type="number" id="cac-budget-facebook" min="0" step="10" placeholder="0" style="flex:1;margin-bottom:0"/>
           </div>
         </div>
         <div>
-          <label style="display:block;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:4px">📬 Print / Direct Mail</label>
+          <label style="display:block;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:4px">🔍 Google</label>
           <div style="display:flex;align-items:center;gap:6px">
             <span style="font-family:'DM Mono',monospace;font-size:.85rem;color:var(--muted)">$/mo</span>
-            <input type="number" id="cac-budget-print" min="0" step="10" placeholder="0" style="flex:1;margin-bottom:0"/>
+            <input type="number" id="cac-budget-google" min="0" step="10" placeholder="0" style="flex:1;margin-bottom:0"/>
           </div>
         </div>
         <div>
-          <label style="display:block;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:4px">🔍 Google / Search Ads</label>
+          <label style="display:block;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:4px">🤝 BNI</label>
           <div style="display:flex;align-items:center;gap:6px">
             <span style="font-family:'DM Mono',monospace;font-size:.85rem;color:var(--muted)">$/mo</span>
-            <input type="number" id="cac-budget-search" min="0" step="10" placeholder="0" style="flex:1;margin-bottom:0"/>
+            <input type="number" id="cac-budget-bni" min="0" step="10" placeholder="0" style="flex:1;margin-bottom:0"/>
           </div>
         </div>
         <div>
-          <label style="display:block;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:4px">🎪 Events / Sponsorships</label>
+          <label style="display:block;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:4px">🌐 RPP</label>
           <div style="display:flex;align-items:center;gap:6px">
             <span style="font-family:'DM Mono',monospace;font-size:.85rem;color:var(--muted)">$/mo</span>
-            <input type="number" id="cac-budget-events" min="0" step="10" placeholder="0" style="flex:1;margin-bottom:0"/>
+            <input type="number" id="cac-budget-rpp" min="0" step="10" placeholder="0" style="flex:1;margin-bottom:0"/>
           </div>
         </div>
         <div>
-          <label style="display:block;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:4px">📦 Other Marketing</label>
+          <label style="display:block;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:4px">📦 Other</label>
           <div style="display:flex;align-items:center;gap:6px">
             <span style="font-family:'DM Mono',monospace;font-size:.85rem;color:var(--muted)">$/mo</span>
             <input type="number" id="cac-budget-other" min="0" step="10" placeholder="0" style="flex:1;margin-bottom:0"/>
@@ -1028,6 +1028,30 @@ td.name-cell { font-family: 'Sora', sans-serif; font-weight: 600; font-size: .8r
       <div class="card fade-in" style="animation-delay:.23s">
         <div class="card-title" id="cac-trend-title">CAC Trend</div>
         <div class="sparkline-wrap"><canvas id="cac-sparkline"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Per-channel CAC breakdown -->
+    <div class="card fade-in" style="animation-delay:.31s;margin-top:var(--gap)">
+      <div class="card-title">CAC by Channel <span style="color:var(--muted);font-size:.65rem;font-weight:400;font-family:'DM Mono',monospace">linked to Jobber lead sources</span></div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Channel</th>
+              <th>Jobber Lead Sources Matched</th>
+              <th style="text-align:right">Monthly Budget</th>
+              <th style="text-align:right">New Clients</th>
+              <th style="text-align:right">CAC</th>
+              <th style="text-align:right">Revenue</th>
+              <th style="text-align:right">ROI</th>
+            </tr>
+          </thead>
+          <tbody id="cac-channel-tbody"></tbody>
+        </table>
+      </div>
+      <div style="margin-top:12px;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:7px;font-size:.7rem;font-family:'DM Mono',monospace;color:var(--muted)">
+        💡 Lead sources in Jobber are matched case-insensitively. If a client's lead source doesn't match any channel it goes into "Other". Go to <strong>Settings → Lead Sources</strong> in Jobber to see your exact source names.
       </div>
     </div>
 
@@ -3988,12 +4012,12 @@ function renderQBOBanner() {
 // ══════════════════════════════════════════════════════════════
 
 const CAC_CHANNELS = [
-  { id: 'billboard', label: 'Billboards / Outdoor',  color: '#1A8834' },
-  { id: 'social',    label: 'Social Media Ads',       color: '#0070C0' },
-  { id: 'print',     label: 'Print / Direct Mail',    color: '#B98900' },
-  { id: 'search',    label: 'Google / Search Ads',    color: '#D72C0D' },
-  { id: 'events',    label: 'Events / Sponsorships',  color: '#7356BF' },
-  { id: 'other',     label: 'Other Marketing',        color: '#637381' }
+  { id: 'billboard', label: 'Billboards',   color: '#1A8834', jobberSources: ['billboard','billboards','billboard ad','outdoor'] },
+  { id: 'facebook',  label: 'Facebook',     color: '#1877F2', jobberSources: ['facebook','facebook ad','facebook ads','social media','social','fb'] },
+  { id: 'google',    label: 'Google',       color: '#D72C0D', jobberSources: ['google','google ad','google ads','google adwords','search','ppc'] },
+  { id: 'bni',       label: 'BNI',          color: '#B98900', jobberSources: ['bni','bni referral','business network','networking'] },
+  { id: 'rpp',       label: 'RPP',          color: '#7356BF', jobberSources: ['rpp','rpp referral','referral partner','referral program'] },
+  { id: 'other',     label: 'Other',        color: '#637381', jobberSources: [] }
 ];
 
 function loadCACBudget() {
@@ -4062,9 +4086,20 @@ function getSpendForDays(days) {
   return monthly / 30.44 * days; // 30.44 = avg days/month
 }
 
+// ── Match a lead source string to a channel ───────────────────
+function matchChannel(leadSource) {
+  if (!leadSource) return 'other';
+  const src = leadSource.toLowerCase().trim();
+  for (const ch of CAC_CHANNELS) {
+    if (ch.id === 'other') continue;
+    if (ch.jobberSources.some(s => src.includes(s) || s.includes(src))) return ch.id;
+  }
+  return 'other';
+}
+
 // ── Build client → first invoice date map (all time) ─────────
 function buildClientFirstMap() {
-  const map = {}; // clientId → { firstDate, firstAmount, name, leadSource, lifetimeRev }
+  const map = {}; // clientId → { firstDate, firstAmount, name, leadSource, channel, lifetimeRev }
   allInvoices.forEach(inv => {
     const cid   = inv.client?.id;
     const name  = inv.client?.name ?? '—';
@@ -4073,11 +4108,13 @@ function buildClientFirstMap() {
     const total = inv.amounts?.total ?? 0;
     if (!cid) return;
     if (!map[cid]) {
-      map[cid] = { name, leadSource: src, firstDate: date, firstAmount: total, lifetimeRev: 0 };
+      map[cid] = { name, leadSource: src, channel: matchChannel(src), firstDate: date, firstAmount: total, lifetimeRev: 0 };
     } else {
       if (date < map[cid].firstDate) {
         map[cid].firstDate   = date;
         map[cid].firstAmount = total;
+        map[cid].leadSource  = src;
+        map[cid].channel     = matchChannel(src);
       }
     }
     map[cid].lifetimeRev += total;
@@ -4142,6 +4179,9 @@ function renderCAC() {
   // ── Period breakdown table ─────────────────────────────────
   renderCACTable(clientFirst, monthlySpend);
 
+  // ── Per-channel CAC breakdown ──────────────────────────────
+  renderCACChannelBreakdown(cacNewClients, monthlySpend);
+
   // ── New clients list ───────────────────────────────────────
   document.getElementById('cac-new-count').textContent =
     newCount ? `(${newCount})` : '';
@@ -4157,7 +4197,48 @@ function renderCAC() {
     : `<tr><td colspan="5"><div class="state-msg" style="padding:12px">No new clients in this period</div></td></tr>`;
 }
 
-// ── Period breakdown table ────────────────────────────────────
+// ── Per-channel CAC breakdown ─────────────────────────────────
+function renderCACChannelBreakdown(newClients, monthlySpend) {
+  const tbody = document.getElementById('cac-channel-tbody');
+  if (!tbody) return;
+
+  const rows = CAC_CHANNELS.map(ch => {
+    const budget   = parseFloat(localStorage.getItem(`cac_budget_${ch.id}`) || 0) || 0;
+    const clients  = newClients.filter(c => c.channel === ch.id);
+    const count    = clients.length;
+    const revenue  = clients.reduce((s,c) => s + c.firstAmount, 0);
+    const cac      = count > 0 && budget > 0 ? budget / count : 0;
+    const roi      = budget > 0 ? ((revenue - budget) / budget * 100) : null;
+    const sources  = ch.jobberSources.slice(0,3).join(', ') || '(all unmatched)';
+    return { ch, budget, count, revenue, cac, roi, sources };
+  }).filter(r => r.budget > 0 || r.count > 0);
+
+  if (rows.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7"><div class="state-msg" style="padding:12px">Enter budget amounts above and click Save Budget to see per-channel breakdown</div></td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = rows.map(r => `<tr>
+    <td>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div style="width:10px;height:10px;border-radius:50%;background:${r.ch.color};flex-shrink:0"></div>
+        <strong>${r.ch.label}</strong>
+      </div>
+    </td>
+    <td style="font-size:.7rem;font-family:'DM Mono',monospace;color:var(--muted)">${r.sources}</td>
+    <td style="text-align:right;font-family:'DM Mono',monospace;color:var(--danger)">${r.budget > 0 ? fmt$(r.budget) : '—'}</td>
+    <td style="text-align:right;font-family:'DM Mono',monospace;font-weight:${r.count>0?700:400};color:${r.count>0?'var(--text)':'var(--muted)'}">${r.count}</td>
+    <td style="text-align:right;font-family:'DM Mono',monospace;color:${r.cac>0?'var(--warn)':'var(--muted)'}">
+      ${r.cac > 0 ? fmt$(r.cac) : r.count > 0 ? '<span style="color:var(--accent)">Free</span>' : '—'}
+    </td>
+    <td style="text-align:right;font-family:'DM Mono',monospace;color:var(--accent)">${r.revenue > 0 ? fmt$(r.revenue) : '—'}</td>
+    <td style="text-align:right;font-family:'DM Mono',monospace;color:${r.roi===null?'var(--muted)':r.roi>=0?'var(--accent)':'var(--danger)'}">
+      ${r.roi !== null ? (r.roi >= 0 ? '+' : '') + r.roi.toFixed(0) + '%' : '—'}
+    </td>
+  </tr>`).join('');
+}
+
+
 function renderCACTable(clientFirst, monthlySpend) {
   const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 

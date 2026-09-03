@@ -1,0 +1,6 @@
+{
+  "rewrites": [
+    { "source": "/callback", "destination": "/index.html" },
+    { "source": "/qbo-callback", "destination": "/index.html" }
+  ]
+}

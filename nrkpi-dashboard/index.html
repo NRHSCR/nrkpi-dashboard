@@ -883,7 +883,7 @@ td.name-cell { font-family: 'Sora', sans-serif; font-weight: 600; font-size: .8r
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
         <div>
           <div class="card-title" style="margin-bottom:2px">Dormant Clients <span style="color:var(--danger);font-weight:700" id="dormant-count"></span></div>
-          <div style="font-size:.68rem;font-family:'DM Mono',monospace;color:var(--muted)">No service in 2+ years — prioritize for re-engagement</div>
+          <div style="font-size:.68rem;font-family:'DM Mono',monospace;color:var(--muted)">No service in 2+ years — prioritize for re-engagement. Uses full account history, not the Week/Month/Year picker above.</div>
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
           <div style="display:flex;background:var(--bg);border:1px solid var(--border);border-radius:6px;overflow:hidden">
@@ -891,6 +891,7 @@ td.name-cell { font-family: 'Sora', sans-serif; font-weight: 600; font-size: .8r
             <button class="btn-sm" id="dorm-tab-commercial" onclick="filterDormant('commercial')" style="border-radius:0;border:none">Commercial</button>
             <button class="btn-sm" id="dorm-tab-residential" onclick="filterDormant('residential')" style="border-radius:0;border:none">Residential</button>
           </div>
+          <button class="btn-sm" onclick="fetchDormantData()" title="Reload full account history">↻ Refresh</button>
           <button class="btn-sm" onclick="exportDormantExcel()" style="background:var(--accent);color:#fff">⬇ Export Excel</button>
           <button class="btn-sm" onclick="printDormant()">🖨 Print</button>
         </div>
@@ -1123,6 +1124,7 @@ let cliAllRows  = []; let cliPage = 1; let cliPageSize = 15; let cliSortMode = '
 let cfAllRows   = []; let cfPage  = 1; let cfPageSize  = 15;
 let yoyInvoices = []; let yoyLoaded = false;
 let dormantAllRows = []; let dormantFiltered = []; let dormantPage = 1; let dormantPageSize = 15; let dormantFilter = 'all';
+let allTimeInvoices = []; let dormantLoaded = false;
 let cacMode = 'week'; // day | week | month | year
 let cacNewClients = []; // new clients in current period
 
@@ -1358,7 +1360,7 @@ function switchView(v) {
   if (v === 'cashflow') renderCashFlow();
   if (v === 'capacity') renderCapacity();
   if (v === 'trends') renderTrends();
-  if (v === 'dormant') renderDormantClients();
+  if (v === 'dormant') { if (!dormantLoaded) fetchDormantData(); else renderDormantClients(); }
   if (v === 'cac') renderCAC();
 }
 
@@ -1568,7 +1570,7 @@ async function fetchData() {
     if (currentView === 'cashflow')      renderCashFlow();
     if (currentView === 'capacity')      renderCapacity();
     if (currentView === 'trends')        renderTrends();
-    if (currentView === 'dormant')       renderDormantClients();
+    if (currentView === 'dormant' && dormantLoaded) renderDormantClients();
     if (currentView === 'cac')            renderCAC();
 
     // If the projected tab is open, re-render it with the new period.
@@ -3232,9 +3234,11 @@ function renderDormantClients() {
   const now        = new Date();
   const twoYearsMs = 2 * 365 * 24 * 60 * 60 * 1000;
 
-  // Build client map from ALL loaded invoices (all-time for lifetime value)
+  // Build client map from the dedicated all-time invoice fetch (NOT the
+  // period-scoped `allInvoices` -- dormant clients have no invoices in
+  // whatever period is selected, so that dataset can never contain them).
   const clientMap = {};
-  allInvoices.forEach(inv => {
+  allTimeInvoices.forEach(inv => {
     const cid  = inv.client?.id ?? 'unknown';
     const name = inv.client?.name ?? 'Unknown';
     const co   = inv.client?.companyName ?? '';
@@ -3774,6 +3778,54 @@ function renderTrends() {
       </td>
     </tr>`;
   }).join('');
+}
+
+// Dormant clients need FULL account history, independent of the Week/Month/Year
+// period selector -- a dormant client by definition has no invoices in whatever
+// period is currently selected, so reusing the period-scoped `allInvoices` can
+// never find them. This is a dedicated, unscoped fetch.
+function buildAllTimeInvoiceQuery(cursor) {
+  const after = cursor ? `, after: "${cursor}"` : '';
+  // Wide enough to cover the account's full history; narrowed to "today" at the end
+  // so it never depends on periodMode or the period picker.
+  const qStart = '2005-01-01';
+  const qEnd   = new Date().toISOString().split('T')[0];
+  return `query AllTimeInvoicesForDormant {
+    invoices(filter:{createdAt:{after:"${qStart}T00:00:00Z",before:"${qEnd}T23:59:59Z"}} first:100${after}) {
+      nodes {
+        id invoiceNumber createdAt issuedDate
+        amounts { total paymentsTotal }
+        client { id name companyName leadSource }
+      }
+      totalCount
+      pageInfo { hasNextPage endCursor }
+    }
+  }`;
+}
+
+async function fetchDormantData() {
+  const tbody = document.getElementById('dormant-tbody');
+  if (tbody) tbody.innerHTML = `<tr><td colspan="7"><div class="state-msg" style="padding:12px">Loading full account history…</div></td></tr>`;
+
+  try {
+    let nodes = [], cursor = null, total = 0;
+    do {
+      if (tbody) tbody.innerHTML = `<tr><td colspan="7"><div class="state-msg" style="padding:12px">Loading full account history… (${nodes.length}${total ? ' of ' + total : ''})</div></td></tr>`;
+      const res = await gqlFetch(buildAllTimeInvoiceQuery(cursor));
+      if (res.errors) throw new Error(res.errors.map(x => x.message).join(' | '));
+      const data = res.data?.invoices;
+      total  = data?.totalCount ?? 0;
+      nodes  = nodes.concat(data?.nodes ?? []);
+      cursor = data?.pageInfo?.hasNextPage ? data.pageInfo.endCursor : null;
+      if (cursor) await sleep(throttleWait(res, 1500));
+    } while (cursor);
+
+    allTimeInvoices = nodes;
+    dormantLoaded   = true;
+    renderDormantClients();
+  } catch (err) {
+    if (tbody) tbody.innerHTML = `<tr><td colspan="7"><div class="state-msg" style="padding:12px;color:var(--danger)">Failed to load: ${err.message} — <a href="#" onclick="fetchDormantData();return false;">retry</a></div></td></tr>`;
+  }
 }
 
 async function fetchYOYData() {

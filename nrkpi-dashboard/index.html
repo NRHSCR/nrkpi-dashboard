@@ -893,6 +893,7 @@ td.name-cell { font-family: 'Sora', sans-serif; font-weight: 600; font-size: .8r
             <button class="btn-sm" id="dorm-tab-residential" onclick="filterDormant('residential')" style="border-radius:0;border:none">Residential</button>
           </div>
           <button class="btn-sm" onclick="fetchDormantData()" title="Reload full account history">↻ Refresh</button>
+          <button class="btn-sm" onclick="exportAllClientActivityExcel()" title="Export every client's Jobber activity, not just dormant -- for merging with older CRM history">⬇ Export ALL Activity</button>
           <button class="btn-sm" onclick="exportDormantExcel()" style="background:var(--accent);color:#fff">⬇ Export Excel</button>
           <button class="btn-sm" onclick="printDormant()">🖨 Print</button>
         </div>
@@ -1125,7 +1126,7 @@ let cliAllRows  = []; let cliPage = 1; let cliPageSize = 15; let cliSortMode = '
 let cfAllRows   = []; let cfPage  = 1; let cfPageSize  = 15;
 let yoyInvoices = []; let yoyLoaded = false;
 let dormantAllRows = []; let dormantFiltered = []; let dormantPage = 1; let dormantPageSize = 15; let dormantFilter = 'all';
-let allTimeInvoices = []; let dormantLoaded = false;
+let allTimeInvoices = []; let dormantLoaded = false; let allClientActivity = {};
 let cacMode = 'week'; // day | week | month | year
 let cacNewClients = []; // new clients in current period
 
@@ -3285,6 +3286,11 @@ function renderDormantClients() {
     diagEl.textContent = `Diagnostics: ${diag.invoicesLoaded} invoices loaded (${diag.invoicesSkippedBadDate} skipped -- bad/missing date) across ${diag.uniqueClientsFound} clients. Oldest client activity found: ${diag.oldestClientActivity}. Newest: ${diag.newestClientActivity}.`;
   }
 
+  // Keep ALL clients' activity (not just the 2+ year dormant ones) so it can
+  // be exported and merged against older external history (e.g. a prior CRM)
+  // that goes back further than what's in this Jobber account.
+  allClientActivity = clientMap;
+
   const el = document.getElementById('dormant-count');
   if (el) el.textContent = dormantAllRows.length ? `(${dormantAllRows.length})` : '';
 
@@ -3360,6 +3366,37 @@ function renderDormantPage() {
 
 function dormantGoPage(n)  { dormantPage = n; renderDormantPage(); }
 function dormantSetSize(n) { dormantPageSize = parseInt(n); dormantPage = 1; renderDormantPage(); }
+
+function exportAllClientActivityExcel() {
+  const rows = Object.entries(allClientActivity).map(([id, c]) => ({
+    id, name: c.name, companyName: c.companyName || '',
+    type: c.companyName ? 'Commercial' : 'Residential',
+    revenue: c.revenue, invoiceCount: c.invoiceCount,
+    lastDate: c.lastDate, leadSource: c.leadSource || ''
+  })).sort((a,b) => b.lastDate - a.lastDate);
+
+  const data = [
+    ['All Client Activity (from Jobber invoices) -- for merging with older CRM history', '', '', '', '', '', ''],
+    ['Generated:', new Date().toLocaleDateString(), '', 'Covers whatever invoice history exists in this Jobber account', '', '', ''],
+    [''],
+    ['Jobber Client ID', 'Client', 'Company', 'Type', 'Lifetime Revenue (in Jobber)', 'Invoices (in Jobber)', 'Last Service (in Jobber)', 'Lead Source'],
+    ...rows.map(c => [
+      c.id, c.name, c.companyName, c.type,
+      c.revenue, c.invoiceCount,
+      fmtDate(c.lastDate.toISOString()), c.leadSource
+    ])
+  ];
+
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(data);
+  ws['!cols'] = [{wch:16},{wch:28},{wch:22},{wch:14},{wch:18},{wch:14},{wch:16},{wch:18}];
+  for (let r = 5; r <= data.length; r++) {
+    const cell = ws[`E${r}`];
+    if (cell && typeof cell.v === 'number') cell.z = '$#,##0.00';
+  }
+  XLSX.utils.book_append_sheet(wb, ws, 'All Client Activity');
+  XLSX.writeFile(wb, `all_client_activity_${new Date().toISOString().split('T')[0]}.xlsx`);
+}
 
 function exportDormantExcel() {
   const period = 'All Time';

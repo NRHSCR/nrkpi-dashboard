@@ -2979,6 +2979,18 @@ function exportServiceExcel(name) {
 }
 
 function renderLeadSource() {
+  // One-time event delegation — attached once, works for all re-renders
+  const tbody = document.getElementById('ls-tbody');
+  if (tbody && !tbody._lsClickAttached) {
+    tbody._lsClickAttached = true;
+    tbody.addEventListener('click', function(e) {
+      const row = e.target.closest('.ls-row');
+      if (!row) return;
+      const src   = row.getAttribute('data-src');
+      const color = row.getAttribute('data-color');
+      showLeadSourceDrilldown(src, color);
+    });
+  }
   // Accrual basis — filter by issuedDate for all period modes
   const { start, end } = getPeriodRange(periodMode, periodOffset);
   const yr = start.getFullYear();
@@ -3096,13 +3108,6 @@ function renderLsPage() {
     </tr>`;
   }).join('') || `<tr><td colspan="7"><div class="state-msg" style="padding:16px">No lead sources found</div></td></tr>`;
 
-  // Attach click listeners directly — most reliable approach
-  document.querySelectorAll('#ls-tbody .ls-row').forEach(row => {
-    row.addEventListener('click', function() {
-      showLeadSourceDrilldown(this.dataset.src, this.dataset.color);
-    });
-  });
-
   // Pagination controls
   const pg = document.getElementById('ls-pagination');
   if (total <= lsPageSize && lsPageSize !== 5) {
@@ -3134,7 +3139,7 @@ function showLeadSourceDrilldown(src, color) {
 
   selectedLeadSource = src;
   document.querySelectorAll('.ls-row').forEach(r => {
-    r.classList.toggle('selected', r.dataset.src === src);
+    r.classList.toggle('selected', r.getAttribute('data-src') === src);
   });
 
   const { start, end } = getPeriodRange(periodMode, periodOffset);

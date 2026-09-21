@@ -3037,25 +3037,44 @@ function renderLeadSource() {
 
   // Revenue bar chart
   const maxRev = rows[0]?.[1].revenue ?? 1;
-  document.getElementById('ls-bar-revenue').innerHTML = rows.map(([src, d], i) => `
-    <div class="bar-row">
-      <span class="bar-label" title="${src}" style="color:${src===NONE?'var(--muted)':'var(--text)'}">${src}</span>
-      <div class="bar-track">
-        <div class="bar-fill" style="width:${(d.revenue/maxRev*100).toFixed(1)}%;background:${src===NONE?'var(--muted)':TECH_COLORS[i%TECH_COLORS.length]}"></div>
-      </div>
+  // Revenue bar chart — clickable
+  const revBarEl = document.getElementById('ls-bar-revenue');
+  revBarEl.innerHTML = rows.map(([src, d], i) => {
+    const color = src===NONE ? 'var(--muted)' : TECH_COLORS[i%TECH_COLORS.length];
+    const safe  = src.replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+    return `<div class="bar-row ls-bar-row" data-src="${safe}" data-color="${color}"
+      style="cursor:pointer;border-radius:5px;padding:2px 4px;transition:background .15s">
+      <span class="bar-label" style="color:${src===NONE?'var(--muted)':'var(--accent2)'};text-decoration:underline;text-underline-offset:2px">${src}</span>
+      <div class="bar-track"><div class="bar-fill" style="width:${(d.revenue/maxRev*100).toFixed(1)}%;background:${color}"></div></div>
       <span class="bar-val">${fmt$(d.revenue)}</span>
-    </div>`).join('');
+    </div>`;
+  }).join('');
+  revBarEl.onclick = function(e) {
+    const row = e.target.closest('.ls-bar-row');
+    if (!row) return;
+    showLeadSourceDrilldown(row.getAttribute('data-src'), row.getAttribute('data-color'));
+    setTimeout(() => document.getElementById('ls-drilldown').scrollIntoView({behavior:'smooth',block:'nearest'}), 100);
+  };
 
-  // Jobs count bar chart
+  // Jobs bar chart — clickable
   const maxJobs = rows[0]?.[1].invoiceCount ?? 1;
-  document.getElementById('ls-bar-jobs').innerHTML = rows.map(([src, d], i) => `
-    <div class="bar-row">
-      <span class="bar-label" title="${src}" style="color:${src===NONE?'var(--muted)':'var(--text)'}">${src}</span>
-      <div class="bar-track">
-        <div class="bar-fill" style="width:${(d.invoiceCount/maxJobs*100).toFixed(1)}%;background:${src===NONE?'var(--muted)':TECH_COLORS[i%TECH_COLORS.length]}"></div>
-      </div>
+  const jobBarEl = document.getElementById('ls-bar-jobs');
+  jobBarEl.innerHTML = rows.map(([src, d], i) => {
+    const color = src===NONE ? 'var(--muted)' : TECH_COLORS[i%TECH_COLORS.length];
+    const safe  = src.replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+    return `<div class="bar-row ls-bar-row" data-src="${safe}" data-color="${color}"
+      style="cursor:pointer;border-radius:5px;padding:2px 4px;transition:background .15s">
+      <span class="bar-label" style="color:${src===NONE?'var(--muted)':'var(--accent2)'};text-decoration:underline;text-underline-offset:2px">${src}</span>
+      <div class="bar-track"><div class="bar-fill" style="width:${(d.invoiceCount/maxJobs*100).toFixed(1)}%;background:${color}"></div></div>
       <span class="bar-val">${d.invoiceCount}</span>
-    </div>`).join('');
+    </div>`;
+  }).join('');
+  jobBarEl.onclick = function(e) {
+    const row = e.target.closest('.ls-bar-row');
+    if (!row) return;
+    showLeadSourceDrilldown(row.getAttribute('data-src'), row.getAttribute('data-color'));
+    setTimeout(() => document.getElementById('ls-drilldown').scrollIntoView({behavior:'smooth',block:'nearest'}), 100);
+  };
 
   // Store full sorted rows for pagination
   lsAllRows = rows;

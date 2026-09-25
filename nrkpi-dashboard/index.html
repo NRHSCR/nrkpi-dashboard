@@ -2255,65 +2255,91 @@ async function fetchProjected() {
 function renderProjected(start, end) {
   const jobs = allProjectedJobs;
 
-  // Helper: get earliest upcoming visit date for a job
+  // ── Helper: get earliest upcoming visit date for a job ─────
   function nextVisit(job) {
     const visits = job.visits?.nodes ?? [];
-    const dates = visits
-      .map(v => v.startAt)
-      .filter(Boolean)
-      .map(d => new Date(d))
-      .sort((a, b) => a - b);
+    const dates = visits.map(v => v.startAt).filter(Boolean)
+      .map(d => new Date(d)).sort((a,b) => a - b);
     return dates[0] ?? null;
   }
 
-  // Filter jobs whose next visit falls within the selected period
+  // ── Build daily entries — distributes multi-day job revenue ─
+  // For each job, find all calendar days spanned by its visits.
+  // Revenue is split evenly across total job-days;
+  // only days that fall inside [start, end] are included.
+  function buildDailyEntries(jobList, pStart, pEnd) {
+    const entries = []; // { date, amount, job }
+    jobList.forEach(job => {
+      const visits  = job.visits?.nodes ?? [];
+      const revenue = job.jobCosting?.totalRevenue ?? 0;
+      if (!visits.length) return;
+
+      // Collect every calendar day across all visits
+      const allDays = [];
+      visits.forEach(v => {
+        const vS = new Date(v.startAt); vS.setHours(0,0,0,0);
+        const vE = v.endAt ? new Date(v.endAt) : new Date(vS);
+        vE.setHours(0,0,0,0);
+        const d = new Date(vS);
+        while (d <= vE) {
+          allDays.push(new Date(d));
+          d.setDate(d.getDate() + 1);
+        }
+      });
+
+      if (!allDays.length) return;
+      const perDay = revenue / allDays.length; // even daily split
+
+      // Only keep days that fall inside the period
+      allDays.forEach(day => {
+        if (day >= pStart && day <= pEnd) {
+          entries.push({ date: day, amount: perDay, job });
+        }
+      });
+    });
+    return entries;
+  }
+
+  // Jobs with ANY visit in or around the period (for services/clients tables)
   const periodJobs = jobs.filter(j => {
-    const nv = nextVisit(j);
-    if (!nv) return false; // exclude anything without a scheduled date
-    return nv >= start && nv <= end;
+    const visits = j.visits?.nodes ?? [];
+    return visits.some(v => {
+      const d = new Date(v.startAt);
+      return d >= start && d <= end;
+    });
   });
+  // Also build multi-day distributed entries for charts and totals
+  const dayEntries = buildDailyEntries(jobs, start, end);
 
-  // Count unscheduled separately for the KPI card (info only, not in totals)
-  const unscheduled = jobs.filter(j => !nextVisit(j));
-
-  // Job value: use jobCosting.totalRevenue; fall back to 0 with a note
-  const jobValue = j => j.jobCosting?.totalRevenue ?? 0;
-
-  const totalProjected  = periodJobs.reduce((s, j) => s + jobValue(j), 0);
-  const scheduledCount  = periodJobs.length;
+  const unscheduled   = jobs.filter(j => !nextVisit(j));
+  const totalProjected = dayEntries.reduce((s, e) => s + e.amount, 0);
+  const scheduledCount = periodJobs.length;
   const avg = scheduledCount ? totalProjected / scheduledCount : 0;
 
-  // KPIs
+  // ── KPIs ──────────────────────────────────────────────────
   document.getElementById('proj-kpi-total').textContent     = fmt$(totalProjected);
   document.getElementById('proj-kpi-total-sub').textContent = scheduledCount + ' scheduled job' + (scheduledCount !== 1 ? 's' : '') + ' in period';
   document.getElementById('proj-kpi-count').textContent     = scheduledCount;
   document.getElementById('proj-kpi-count-sub').textContent = 'with visit dates';
   document.getElementById('proj-kpi-avg').textContent       = fmt$(avg);
   document.getElementById('proj-kpi-unscheduled').textContent = unscheduled.length;
-  document.getElementById('proj-kpi-unscheduled').closest('.kpi-card').querySelector('.kpi-sub').textContent = 'excluded — no date set';
+  document.getElementById('proj-kpi-unscheduled').closest('.kpi-card')
+    .querySelector('.kpi-sub').textContent = 'excluded — no date set';
 
-  // Chart: revenue by day (week), by week (month), or by month (year)
+  // ── Charts — use distributed daily entries ─────────────────
   if (periodMode === 'week') {
     document.getElementById('proj-sparkline-title').textContent = 'Projected Revenue by Day';
     document.getElementById('proj-week-breakdown').style.display = 'none';
     const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
     const totals = [0,0,0,0,0,0,0];
-    periodJobs.forEach(j => {
-      const nv = nextVisit(j);
-      if (!nv) return;
-      totals[(nv.getDay() + 6) % 7] += jobValue(j);
-    });
+    dayEntries.forEach(e => { totals[(e.date.getDay() + 6) % 7] += e.amount; });
     drawChart('proj-sparkline', days, totals, '#0070C0');
 
   } else if (periodMode === 'year') {
     document.getElementById('proj-sparkline-title').textContent = 'Projected Revenue by Month';
     const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     const totals = new Array(12).fill(0);
-    periodJobs.forEach(j => {
-      const nv = nextVisit(j);
-      if (!nv) return;
-      totals[nv.getMonth()] += jobValue(j);
-    });
+    dayEntries.forEach(e => { totals[e.date.getMonth()] += e.amount; });
     drawChart('proj-sparkline', MONTHS, totals, '#0070C0');
     document.getElementById('proj-week-breakdown').innerHTML = MONTHS.map((m, idx) => `
       <div class="week-mini">
@@ -2324,7 +2350,6 @@ function renderProjected(start, end) {
 
   } else {
     document.getElementById('proj-sparkline-title').textContent = 'Projected Revenue by Week';
-    // Build week buckets
     const weeks = [];
     let wStart = new Date(start);
     wStart.setDate(wStart.getDate() - (wStart.getDay() + 6) % 7);
@@ -2333,15 +2358,11 @@ function renderProjected(start, end) {
       weeks.push({ start: new Date(wStart), end: wEnd, total: 0 });
       wStart.setDate(wStart.getDate() + 7);
     }
-    periodJobs.forEach(j => {
-      const nv = nextVisit(j);
-      if (!nv) return;
-      const w = weeks.find(w => nv >= w.start && nv <= w.end);
-      if (w) w.total += jobValue(j);
+    dayEntries.forEach(e => {
+      const w = weeks.find(w => e.date >= w.start && e.date <= w.end);
+      if (w) w.total += e.amount;
     });
     drawChart('proj-sparkline', weeks.map((_, i) => `W${i+1}`), weeks.map(w => w.total), '#58a6ff');
-
-    // Mini week cards
     document.getElementById('proj-week-breakdown').innerHTML = weeks.map((w, i) => `
       <div class="week-mini">
         <div class="week-mini-label">Week ${i+1} · ${w.start.toLocaleDateString('en-US',{month:'short',day:'numeric'})}</div>
@@ -2350,14 +2371,14 @@ function renderProjected(start, end) {
     document.getElementById('proj-week-breakdown').style.display = 'grid';
   }
 
-  // Top clients bar
+  // ── Top clients bar (use distributed amounts) ──────────────
   const clientMap = {};
-  periodJobs.forEach(j => {
-    const n = j.client?.name ?? 'Unknown';
-    clientMap[n] = (clientMap[n] ?? 0) + jobValue(j);
+  dayEntries.forEach(e => {
+    const n = e.job.client?.name ?? 'Unknown';
+    clientMap[n] = (clientMap[n] ?? 0) + e.amount;
   });
   const sortedClients = Object.entries(clientMap).sort((a,b) => b[1]-a[1]).slice(0,7);
-  const maxV = sortedClients[0]?.[1] ?? 1;
+  const maxClientRev  = sortedClients[0]?.[1] ?? 1;
   // Cache jobs for drill-down
   projPeriodJobs = periodJobs;
   projDrilldownKey = null;
@@ -2366,7 +2387,6 @@ function renderProjected(start, end) {
   if (dd) dd.style.display = 'none';
 
   // Client bar chart — clickable
-  const maxClientRev = Math.max(...sortedClients.map(([,v]) => v), 1);
   document.getElementById('proj-bar-chart').innerHTML = sortedClients.length
     ? sortedClients.map(([name, val], i) => `
         <div class="bar-row" onclick="showProjDrilldown('client','${name.replace(/'/g,"\\'")}','${TECH_COLORS[i%TECH_COLORS.length]}')"
@@ -2380,7 +2400,9 @@ function renderProjected(start, end) {
       .join('')
     : '<div class="state-msg" style="padding:16px;font-size:.78rem">No jobs in this period</div>';
 
-  // Table
+  // Table uses full job revenue; services/drill-down shows total job value
+  // jobValue now accounts for distributed days: use total revenue for display tables
+  const jobValue = j => j.jobCosting?.totalRevenue ?? 0;
   renderProjTable(periodJobs, nextVisit, jobValue);
   renderProjServices(periodJobs, nextVisit);
   document.getElementById('proj-load-wrap').style.display = 'block';

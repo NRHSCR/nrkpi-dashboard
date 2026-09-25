@@ -3524,7 +3524,7 @@ function renderProfitability() {
     ...j,
     laborCost: calcLabor(j.revenue, j.hours),
     profit:    j.revenue - calcLabor(j.revenue, j.hours),
-    margin:    j.revenue > 0 ? ((j.revenue - j.hours * laborRate) / j.revenue * 100) : 0
+    margin:    j.revenue > 0 ? ((j.revenue - calcLabor(j.revenue, j.hours)) / j.revenue * 100) : 0
   })).sort((a,b) => b.profit - a.profit);
 
   const totalRev    = jobs.reduce((s,j) => s + j.revenue, 0);
@@ -3603,7 +3603,7 @@ function renderProfitability() {
     const techShare = (jm && jm.totalHours > 0) ? ((jm.techHours?.[uid] ?? 0) / jm.totalHours) : 0;
     if (!techMap[uid]) techMap[uid] = { name, revenue: 0, laborCost: 0 };
     techMap[uid].revenue   += rev * techShare;
-    techMap[uid].laborCost += hrs * laborRate;
+    techMap[uid].laborCost += calcLabor(rev * techShare, hrs);
   });
   const techRows = Object.values(techMap).sort((a,b) => b.revenue - b.laborCost - (a.revenue - a.laborCost));
   const maxTechProfit = Math.max(...techRows.map(t=>t.revenue-t.laborCost), 1);

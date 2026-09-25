@@ -779,12 +779,16 @@ td.name-cell { font-family: 'Sora', sans-serif; font-weight: 600; font-size: .8r
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px">
 
         <div>
-          <label style="display:block;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:4px">Avg Labor Cost / Hr</label>
+          <label style="display:block;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:4px">Labor Cost (Technicians)</label>
           <div style="display:flex;gap:6px;align-items:center">
-            <input type="number" id="labor-rate" value="25" min="0" step="1" onchange="renderProfitability()"
+            <select id="labor-type" onchange="renderProfitability()" style="margin-bottom:0;padding:6px 8px;font-size:.82rem;width:58px;flex-shrink:0">
+              <option value="pct">%</option>
+              <option value="rate">$/hr</option>
+            </select>
+            <input type="number" id="labor-rate" placeholder="0" min="0" step="0.5" onchange="renderProfitability()"
               style="flex:1;margin-bottom:0;font-family:'DM Mono',monospace"/>
-            <span style="font-size:.72rem;color:var(--muted);font-family:'DM Mono',monospace">$/hr</span>
           </div>
+          <div id="labor-hint" style="font-size:.6rem;color:var(--muted);font-family:'DM Mono',monospace;margin-top:3px">% of period revenue paid to techs</div>
         </div>
 
         <div>
@@ -823,6 +827,13 @@ td.name-cell { font-family: 'Sora', sans-serif; font-weight: 600; font-size: .8r
       <div class="kpi-card purple fade-in" style="animation-delay:.13s"><div class="kpi-label">Net Profit</div><div class="kpi-value" id="prof-kpi-net">—</div><div class="kpi-sub" id="prof-kpi-net-sub">after all costs</div></div>
       <div class="kpi-card yellow fade-in" style="animation-delay:.15s"><div class="kpi-label">Net Margin</div><div class="kpi-value" id="prof-kpi-margin">—</div><div class="kpi-sub">revenue kept after all costs</div></div>
     </div>
+
+    <!-- Period breakdown bar chart -->
+    <div class="card fade-in" style="margin-bottom:var(--gap)">
+      <div class="card-title" id="prof-period-title">Profitability by Month</div>
+      <div style="height:220px;position:relative"><canvas id="prof-period-chart"></canvas></div>
+    </div>
+
     <div class="charts-row">
       <div class="card fade-in" style="animation-delay:.18s">
         <div class="card-title">Profit by Service Type</div>
@@ -3428,27 +3439,42 @@ function showTechDrilldown(uid, name, color) {
 // 💰 PROFITABILITY
 // ══════════════════════════════════════════════════════════════
 function renderProfitability() {
-  // Inject QBO banner at top of profitability view
   const bannerEl = document.getElementById('prof-qbo-banner');
   if (bannerEl) bannerEl.innerHTML = renderQBOBanner();
 
-  const laborRate = parseFloat(document.getElementById('labor-rate')?.value ?? 25);
+  // ── Labor input ───────────────────────────────────────────
+  const laborType = document.getElementById('labor-type')?.value
+    || localStorage.getItem('prof_labor_type') || 'pct';
+  const laborVal  = parseFloat(document.getElementById('labor-rate')?.value
+    || localStorage.getItem('prof_labor_val') || 0) || 0;
 
-  // Load and save COGS/Overhead inputs
+  localStorage.setItem('prof_labor_type', laborType);
+  localStorage.setItem('prof_labor_val',  laborVal);
+
+  // Update hint text
+  const hint = document.getElementById('labor-hint');
+  if (hint) hint.textContent = laborType === 'pct'
+    ? '% of period revenue paid to techs'
+    : 'average hourly rate paid to techs';
+  if (document.getElementById('labor-type'))  document.getElementById('labor-type').value  = laborType;
+  if (document.getElementById('labor-rate'))  document.getElementById('labor-rate').value  = laborVal || '';
+
+  // ── COGS / Overhead ──────────────────────────────────────
   const cogsVal  = parseFloat(document.getElementById('prof-cogs-val')?.value     || localStorage.getItem('prof_cogs_val')     || 0) || 0;
   const cogsType = document.getElementById('prof-cogs-type')?.value               || localStorage.getItem('prof_cogs_type')    || 'pct';
   const ovhVal   = parseFloat(document.getElementById('prof-overhead-val')?.value || localStorage.getItem('prof_overhead_val') || 0) || 0;
   const ovhType  = document.getElementById('prof-overhead-type')?.value           || localStorage.getItem('prof_overhead_type') || 'fixed';
-  localStorage.setItem('prof_cogs_val',     cogsVal);
-  localStorage.setItem('prof_cogs_type',    cogsType);
-  localStorage.setItem('prof_overhead_val', ovhVal);
-  localStorage.setItem('prof_overhead_type',ovhType);
-
-  // Restore input values
+  localStorage.setItem('prof_cogs_val', cogsVal); localStorage.setItem('prof_cogs_type', cogsType);
+  localStorage.setItem('prof_overhead_val', ovhVal); localStorage.setItem('prof_overhead_type', ovhType);
   if (document.getElementById('prof-cogs-val'))      document.getElementById('prof-cogs-val').value      = cogsVal || '';
   if (document.getElementById('prof-cogs-type'))     document.getElementById('prof-cogs-type').value     = cogsType;
   if (document.getElementById('prof-overhead-val'))  document.getElementById('prof-overhead-val').value  = ovhVal || '';
   if (document.getElementById('prof-overhead-type')) document.getElementById('prof-overhead-type').value = ovhType;
+
+  // ── Helper: compute labor cost from revenue or hours ────
+  function calcLabor(revenue, hours) {
+    return laborType === 'pct' ? revenue * (laborVal / 100) : hours * laborVal;
+  }
   const { start } = getPeriodRange(periodMode, periodOffset);
   const yr = start.getFullYear();
   const timesheets = periodMode === 'year'
@@ -3474,8 +3500,8 @@ function renderProfitability() {
 
   const jobs = Object.values(jobProfit).map(j => ({
     ...j,
-    laborCost: j.hours * laborRate,
-    profit:    j.revenue - (j.hours * laborRate),
+    laborCost: calcLabor(j.revenue, j.hours),
+    profit:    j.revenue - calcLabor(j.revenue, j.hours),
     margin:    j.revenue > 0 ? ((j.revenue - j.hours * laborRate) / j.revenue * 100) : 0
   })).sort((a,b) => b.profit - a.profit);
 
@@ -3496,7 +3522,9 @@ function renderProfitability() {
   document.getElementById('prof-kpi-profit').textContent    = fmt$(totalGross);
   document.getElementById('prof-kpi-margin').textContent    = avgMargin.toFixed(1) + '%';
   document.getElementById('prof-kpi-margin-sub').textContent = fmt$(totalGross) + ' gross profit';
-  document.getElementById('prof-kpi-labor-sub').textContent  = fmtH(jobs.reduce((s,j)=>s+j.hours,0)) + ' × $' + laborRate + '/hr';
+  document.getElementById('prof-kpi-labor-sub').textContent = laborType === 'pct'
+    ? laborVal + '% of revenue'
+    : fmtH(jobs.reduce((s,j)=>s+j.hours,0)) + ' × $' + laborVal + '/hr';
 
   const cogsEl = document.getElementById('prof-kpi-cogs');
   const netEl  = document.getElementById('prof-kpi-net');
@@ -3514,6 +3542,9 @@ function renderProfitability() {
     netEl.style.color = netProfit >= 0 ? 'var(--accent)' : 'var(--danger)';
     if (netSubEl) netSubEl.textContent = netMargin.toFixed(1) + '% net margin';
   }
+
+  // ── Period breakdown bar chart ────────────────────────────
+  renderProfPeriodChart(start, end, cogsVal, cogsType, ovhVal, ovhType, calcLabor);
 
   // By service type
   const svcMap = window._svcMap ?? {};
@@ -4863,6 +4894,68 @@ function renderCACChannelBreakdown(newClients, monthlySpend) {
   </tr>`).join('');
 }
 
+
+// ── Profitability period breakdown bar chart ──────────────────
+function renderProfPeriodChart(start, end, cogsVal, cogsType, ovhVal, ovhType, calcLabor) {
+  const canvas = document.getElementById('prof-period-chart');
+  if (!canvas) return;
+  if (window._profPeriodChart) { window._profPeriodChart.destroy(); window._profPeriodChart = null; }
+  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  let buckets = [];
+  if (periodMode === 'year') {
+    document.getElementById('prof-period-title').textContent = 'Profitability by Month';
+    const yr = start.getFullYear();
+    for (let m = 0; m < 12; m++)
+      buckets.push({ label: MONTHS[m], start: new Date(yr,m,1), end: new Date(yr,m+1,0,23,59,59) });
+  } else if (periodMode === 'month') {
+    document.getElementById('prof-period-title').textContent = 'Profitability by Week';
+    let d = new Date(start); d.setDate(d.getDate() - ((d.getDay()+6)%7));
+    while (d <= end) {
+      const wEnd = new Date(d); wEnd.setDate(wEnd.getDate()+6); wEnd.setHours(23,59,59);
+      buckets.push({ label: `${d.getMonth()+1}/${d.getDate()}`, start: new Date(d), end: wEnd < end ? wEnd : new Date(end) });
+      d.setDate(d.getDate()+7);
+    }
+  } else {
+    document.getElementById('prof-period-title').textContent = 'Profitability by Day';
+    let d = new Date(start);
+    while (d <= end) {
+      const dEnd = new Date(d); dEnd.setHours(23,59,59);
+      buckets.push({ label: `${d.getMonth()+1}/${d.getDate()}`, start: new Date(d), end: dEnd });
+      d.setDate(d.getDate()+1);
+    }
+  }
+  const data = buckets.map(b => {
+    const rev   = allInvoices.filter(i=>{ const d=new Date(i.issuedDate??i.createdAt); return d>=b.start&&d<=b.end; }).reduce((s,i)=>s+(i.amounts?.total??0),0);
+    const hrs   = (allTimesheets||[]).filter(t=>{ const d=new Date(t.startAt); return d>=b.start&&d<=b.end; }).reduce((s,t)=>s+(t.finalDuration??0)/3600,0);
+    const labor = calcLabor(rev,hrs);
+    const cogs  = cogsType==='pct' ? rev*(cogsVal/100) : (buckets.length?cogsVal/buckets.length:0);
+    const ovh   = ovhType ==='pct' ? rev*(ovhVal /100) : (buckets.length?ovhVal /buckets.length:0);
+    return { label:b.label, rev, labor, gross:rev-labor, net:rev-labor-cogs-ovh };
+  });
+  window._profPeriodChart = new Chart(canvas.getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels: data.map(d=>d.label),
+      datasets: [
+        { label:'Revenue',      data:data.map(d=>d.rev),   backgroundColor:'#1A883455', borderColor:'#1A8834', borderWidth:1.5, borderRadius:3 },
+        { label:'Labor Cost',   data:data.map(d=>d.labor), backgroundColor:'#D72C0D55', borderColor:'#D72C0D', borderWidth:1.5, borderRadius:3 },
+        { label:'Gross Profit', data:data.map(d=>d.gross), backgroundColor:'#0070C055', borderColor:'#0070C0', borderWidth:1.5, borderRadius:3 },
+        { label:'Net Profit',   data:data.map(d=>d.net),   backgroundColor:'#7356BF55', borderColor:'#7356BF', borderWidth:1.5, borderRadius:3 },
+      ]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins: {
+        legend:{ position:'bottom', labels:{ font:{size:10}, boxWidth:12 } },
+        tooltip:{ callbacks:{ label: ctx=>`${ctx.dataset.label}: ${fmt$(ctx.raw)}` } }
+      },
+      scales: {
+        x:{ grid:{display:false}, ticks:{ font:{size:9}, maxRotation:45 } },
+        y:{ grid:{color:'#f0f0f0'}, ticks:{ font:{size:9}, callback: v=>'$'+(v>=1000?(v/1000).toFixed(0)+'k':v.toFixed(0)) } }
+      }
+    }
+  });
+}
 
 function renderCACTable(clientFirst, monthlySpend) {
   const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];

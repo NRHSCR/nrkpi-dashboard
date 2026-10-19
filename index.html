@@ -1284,6 +1284,92 @@ const WORK_HOURS_PER_DAY = 8;
 // Tech colors palette
 const TECH_COLORS = ['#1A8834','#0070C0','#B98900','#D72C0D','#7356BF','#007A8C','#B54708','#2D7F6E'];
 
+// ── Service Normalization ────────────────────────────────────
+// Maps raw Jobber line-item names → canonical service categories.
+// Edit SERVICE_GROUPS to add or change groupings — order matters
+// (first matching group wins).
+const SERVICE_GROUPS = [
+  {
+    category: 'Christmas Lights',
+    // Exact whole-name matches (lowercase)
+    exact: [
+      'gutters','gutter','gables','gable','ridgeline','ridge line',
+      'ridge','ridges','fascia','peaks','peak','valleys','valley',
+      'trees','tree','bushes','bush','shrubs','shrub',
+      'wreath','wreaths','garland','garlands','megatree','mega tree',
+      'roofline','roof line','soffit','eaves','windows','dormers',
+      'doors','door frame','columns','column','stairs','steps',
+      'pathway','pathways','net lights','net light','strands','strand'
+    ],
+    // Substring matches (lowercase) — checked against the whole name
+    contains: [
+      'christmas','holiday light','xmas','light install','light removal',
+      'light takedown','light removal','light storage','c7 ','c9 ',
+      'pathway light','net light','led string','mega tree','light hang',
+      'seasonal light','holiday instal','holiday decor'
+    ]
+  },
+  {
+    category: 'Exterior Cleaning',
+    exact: [],
+    contains: [
+      'pressure wash','power wash','soft wash','house wash',
+      'exterior clean','concrete clean','driveway clean','deck clean',
+      'fence clean','patio clean','sidewalk clean','siding clean',
+      'vinyl clean','brick clean','stucco clean','surface clean',
+      'building wash','curb clean','pool deck','wood deck'
+    ]
+  },
+  {
+    category: 'Window Cleaning',
+    exact: [],
+    contains: [
+      'window clean','window wash','screen clean','track clean',
+      'glass clean','skylight clean','storm window','window polish'
+    ]
+  },
+  {
+    category: 'Gutter Cleaning',
+    exact: ['gutter cleaning','downspout cleaning'],
+    contains: [
+      'gutter clean','downspout clean','gutter flush','leaf removal',
+      'gutter guard','debris removal'
+    ]
+  },
+  {
+    category: 'Air Duct & Dryer Vent',
+    exact: [],
+    contains: [
+      'air duct','dryer vent','vent clean','hvac clean',
+      'furnace clean','duct clean','ventilation clean'
+    ]
+  },
+  {
+    category: 'Carpet & Tile Cleaning',
+    exact: [],
+    contains: [
+      'carpet clean','tile clean','grout clean','upholster',
+      'area rug','rug clean','floor clean','hardwood clean',
+      'laminate clean','vinyl floor'
+    ]
+  }
+];
+
+/**
+ * Maps a raw Jobber line-item name to its canonical service category.
+ * Falls back to the trimmed raw name if no group matches.
+ */
+function canonicalService(rawName) {
+  if (!rawName) return 'Unnamed Service';
+  const trimmed = rawName.trim();
+  const low = trimmed.toLowerCase();
+  for (const group of SERVICE_GROUPS) {
+    if (group.exact && group.exact.includes(low)) return group.category;
+    if (group.contains && group.contains.some(kw => low.includes(kw))) return group.category;
+  }
+  return trimmed || 'Unnamed Service';
+}
+
 // ── Helpers ─────────────────────────────────────────────────
 const fmt$ = n => '$' + (n??0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
 const fmtH = h => Number(h??0).toFixed(1) + 'h';
@@ -2449,20 +2535,21 @@ function renderProjServices(jobs, nextVisit) {
     const visitDate = nextVisit(job);
 
     if (lineItems.length > 0) {
-      // Use line items for service names
+      // Use canonical service names (normalizes e.g. "Ridgeline" → "Christmas Lights")
       lineItems.forEach(item => {
-        const name = item.name?.trim() || 'Unnamed Service';
-        if (!svcMap[name]) svcMap[name] = { count: 0, revenue: 0, nextDate: null };
+        const name = canonicalService(item.name);
+        if (!svcMap[name]) svcMap[name] = { count: 0, revenue: 0, nextDate: null, rawItems: [] };
         svcMap[name].count   += 1;
         svcMap[name].revenue += item.totalPrice ?? revenue / lineItems.length;
+        svcMap[name].rawItems.push(item.name?.trim() || '');
         if (visitDate && (!svcMap[name].nextDate || visitDate < svcMap[name].nextDate)) {
           svcMap[name].nextDate = visitDate;
         }
       });
     } else {
-      // Fall back to job title
-      const name = job.title?.trim() || 'General Service';
-      if (!svcMap[name]) svcMap[name] = { count: 0, revenue: 0, nextDate: null };
+      // Fall back to canonical job title
+      const name = canonicalService(job.title) || 'General Service';
+      if (!svcMap[name]) svcMap[name] = { count: 0, revenue: 0, nextDate: null, rawItems: [] };
       svcMap[name].count   += 1;
       svcMap[name].revenue += revenue;
       if (visitDate && (!svcMap[name].nextDate || visitDate < svcMap[name].nextDate)) {
@@ -2536,10 +2623,11 @@ function showProjDrilldown(type, key, color) {
   // Filter jobs matching the selected key
   let matchedJobs = [];
   if (type === 'service') {
+    // Match using canonicalService so "Christmas Lights" finds Ridgeline, Gables, etc.
     matchedJobs = jobs.filter(job => {
       const items = job.lineItems?.nodes ?? [];
-      if (items.length > 0) return items.some(it => (it.name?.trim() || 'Unnamed Service') === key);
-      return (job.title?.trim() || 'General Service') === key;
+      if (items.length > 0) return items.some(it => canonicalService(it.name) === key);
+      return canonicalService(job.title) === key;
     });
   } else {
     // client
@@ -2552,10 +2640,10 @@ function showProjDrilldown(type, key, color) {
     return da - db;
   });
 
-  // For service drills: sum only the matching line item prices (not whole job value)
+  // For service drills: sum only the matching canonical line item prices
   const totalRev = type === 'service'
     ? matchedJobs.reduce((s,j) => {
-        const matchItems = (j.lineItems?.nodes ?? []).filter(it => (it.name?.trim() || 'Unnamed Service') === key);
+        const matchItems = (j.lineItems?.nodes ?? []).filter(it => canonicalService(it.name) === key);
         return s + (matchItems.length > 0
           ? matchItems.reduce((ss,it) => ss + (it.totalPrice ?? 0), 0)
           : (j.jobCosting?.totalRevenue ?? 0));
@@ -2880,9 +2968,9 @@ function renderServices() {
     const lineItems   = job.lineItems?.nodes ?? [];
 
     if (lineItems.length > 0) {
-      // Use actual line items for service categorisation
+      // Use canonical service names (normalizes e.g. "Ridgeline" → "Christmas Lights")
       lineItems.forEach(item => {
-        const name = item.name?.trim() || 'Unnamed Service';
+        const name = canonicalService(item.name);
         const rev  = item.totalPrice ?? 0;
         if (!svcMap[name]) svcMap[name] = { revenue: 0, jobCount: 0, jobs: [] };
         svcMap[name].revenue   += rev;
@@ -2892,8 +2980,8 @@ function renderServices() {
         }
       });
     } else if (jobRevenue > 0) {
-      // No line items — fall back to job title as the service name
-      const name = job.title?.trim() || 'General Service';
+      // No line items — fall back to canonical job title as the service name
+      const name = canonicalService(job.title) || 'General Service';
       if (!svcMap[name]) svcMap[name] = { revenue: 0, jobCount: 0, jobs: [] };
       svcMap[name].revenue  += jobRevenue;
       svcMap[name].jobCount += 1;

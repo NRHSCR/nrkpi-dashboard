@@ -366,6 +366,7 @@ td.name-cell { font-family: 'Sora', sans-serif; font-weight: 600; font-size: .8r
     </button>
     <button class="btn-icon" onclick="openSetup()" style="font-size:.68rem" title="Customize branding">⚙ Setup</button>
     <span class="status-badge idle" id="status-badge">IDLE</span>
+    <span style="font-size:.58rem;opacity:.45;font-family:'DM Mono',monospace;letter-spacing:.04em" title="Build version">v2.1</span>
   </div>
 </header>
 
@@ -1284,29 +1285,41 @@ const WORK_HOURS_PER_DAY = 8;
 // Tech colors palette
 const TECH_COLORS = ['#1A8834','#0070C0','#B98900','#D72C0D','#7356BF','#007A8C','#B54708','#2D7F6E'];
 
-// ── Service Normalization ────────────────────────────────────
-// Maps raw Jobber line-item names → canonical service categories.
-// Edit SERVICE_GROUPS to add or change groupings — order matters
-// (first matching group wins).
+// ── Service Normalization v2 ─────────────────────────────────
+// Maps raw Jobber line-item / job-title names → canonical service categories.
+// Order matters — first matching group wins.
+// IMPORTANT: 'contains' checks if the keyword appears ANYWHERE in the name.
+//            'exact'    checks if the ENTIRE lowercased name equals the keyword.
 const SERVICE_GROUPS = [
   {
     category: 'Christmas Lights',
-    // Exact whole-name matches (lowercase)
+    // Exact whole-name matches — only fires if the full name equals this string
+    // Keep ONLY truly ambiguous short words here (gutters alone, trees alone, etc.)
     exact: [
-      'gutters','gutter','gables','gable','ridgeline','ridge line',
-      'ridge','ridges','fascia','peaks','peak','valleys','valley',
-      'trees','tree','bushes','bush','shrubs','shrub',
-      'wreath','wreaths','garland','garlands','megatree','mega tree',
-      'roofline','roof line','soffit','eaves','windows','dormers',
-      'doors','door frame','columns','column','stairs','steps',
-      'pathway','pathways','net lights','net light','strands','strand'
+      'gutters','gutter','trees','tree','bushes','bush','shrubs','shrub',
+      'ridge','ridges','peaks','peak','valleys','valley',
+      'wreaths','garlands','net lights','strands','strand'
     ],
-    // Substring matches (lowercase) — checked against the whole name
+    // Substring matches — fires if the keyword appears ANYWHERE in the name.
+    // This is the primary matching path; architectural terms are here so names like
+    // "Ridgeline Lights", "Christmas Gable Trim", "C9 Ridgeline" all match.
     contains: [
-      'christmas','holiday light','xmas','light install','light removal',
-      'light takedown','light removal','light storage','c7 ','c9 ',
-      'pathway light','net light','led string','mega tree','light hang',
-      'seasonal light','holiday instal','holiday decor'
+      // ── Primary service-name keywords ──────────────────────────
+      'christmas','holiday light','holiday decor','holiday instal',
+      'xmas','seasonal light',
+      // ── Install / removal / storage ────────────────────────────
+      'light install','light removal','light takedown','light storage',
+      'light hang','light set','light take',
+      // ── Bulb / strand types ─────────────────────────────────────
+      'c7','c9','led string','mini light','string light','rope light',
+      'net light','pathway light',
+      // ── Architectural components unique to Christmas lights ─────
+      // Listed here (not in exact) so "Ridgeline Lights", "Gable Trim", etc. match
+      'ridgeline','ridge line','gable','fascia','roofline','roof line',
+      'soffit','eave','dormer','mega tree','megatree','wreath','garland',
+      // ── Misc Christmas light terms ──────────────────────────────
+      'light rentals','light rental','holiday package','christmas package',
+      'takedown','install & store','install and store'
     ]
   },
   {
@@ -1330,9 +1343,11 @@ const SERVICE_GROUPS = [
   },
   {
     category: 'Gutter Cleaning',
+    // Gutter Cleaning must come AFTER Christmas Lights so standalone "gutters"
+    // (an exact match above) maps to Christmas Lights, not here.
     exact: ['gutter cleaning','downspout cleaning'],
     contains: [
-      'gutter clean','downspout clean','gutter flush','leaf removal',
+      'gutter clean','downspout clean','gutter flush',
       'gutter guard','debris removal'
     ]
   },
@@ -1361,7 +1376,8 @@ const SERVICE_GROUPS = [
  */
 function canonicalService(rawName) {
   if (!rawName) return 'Unnamed Service';
-  const trimmed = rawName.trim();
+  // Normalize whitespace (handles non-breaking spaces, tabs, etc.)
+  const trimmed = rawName.replace(/\s+/g, ' ').trim();
   const low = trimmed.toLowerCase();
   for (const group of SERVICE_GROUPS) {
     if (group.exact && group.exact.includes(low)) return group.category;
@@ -2529,6 +2545,18 @@ function renderProjServices(jobs, nextVisit) {
   // Build service map from job line items or job title as fallback
   const svcMap = {}; // serviceName → { count, revenue, nextDate }
 
+  // Debug: log raw line-item names to browser console (open DevTools → Console)
+  console.group('[Dashboard] Projected service normalization');
+  jobs.forEach(j => {
+    const items = j.lineItems?.nodes ?? [];
+    if (items.length > 0) {
+      items.forEach(it => console.log(`  raw: "${it.name}"  →  canonical: "${canonicalService(it.name)}"`));
+    } else {
+      console.log(`  job title fallback: "${j.title}"  →  canonical: "${canonicalService(j.title)}"`);
+    }
+  });
+  console.groupEnd();
+
   jobs.forEach(job => {
     const revenue   = job.jobCosting?.totalRevenue ?? 0;
     const lineItems = job.lineItems?.nodes ?? [];
@@ -2684,25 +2712,29 @@ function showProjDrilldown(type, key, color) {
                   const clientName = job.client?.name ?? '—';
 
                   if (type === 'service') {
-                    // Find the specific line item(s) matching the selected service
-                    const matchingItems = items.filter(it => (it.name?.trim() || 'Unnamed Service') === key);
+                    // Match items by canonical name so "Christmas Lights" finds Ridgeline, Gables, etc.
+                    const matchingItems = items.filter(it => canonicalService(it.name) === key);
                     const linePrice = matchingItems.reduce((s,it) => s + (it.totalPrice ?? 0), 0);
                     const lineQty   = matchingItems.reduce((s,it) => s + (it.quantity ?? 1), 0);
-                    // If no matching items (fallback job), use total revenue
                     const displayPrice = matchingItems.length > 0 ? linePrice : (job.jobCosting?.totalRevenue ?? 0);
                     const displayQty   = matchingItems.length > 0 ? lineQty : 1;
+                    // Show sub-items (e.g. "Ridgeline, Gables, Trees") as a second line
+                    const subItems = matchingItems.map(it => it.name?.trim()).filter(Boolean).join(', ');
                     return `<tr>
                       <td class="name-cell">${clientName}</td>
-                      <td style="font-size:.78rem;color:var(--muted)">${job.title ?? '—'}<span style="font-size:.65rem;font-family:'DM Mono',monospace;color:var(--muted);margin-left:6px">#${job.jobNumber??''}</span></td>
+                      <td style="font-size:.78rem;color:var(--muted)">
+                        <div>${job.title ?? '—'}<span style="font-size:.65rem;font-family:'DM Mono',monospace;color:var(--muted);margin-left:6px">#${job.jobNumber??''}</span></div>
+                        ${subItems ? `<div style="font-size:.65rem;color:var(--muted);margin-top:2px;font-style:italic">${subItems}</div>` : ''}
+                      </td>
                       <td style="font-family:'DM Mono',monospace;font-size:.72rem">${fmtDt(visitDate)}</td>
                       <td style="text-align:right;font-family:'DM Mono',monospace;font-size:.78rem;color:var(--muted)">${displayQty % 1 === 0 ? displayQty : displayQty.toFixed(2)}</td>
                       <td style="text-align:right;font-family:'DM Mono',monospace;color:var(--accent);font-weight:700">${fmt$(displayPrice)}</td>
                     </tr>`;
                   } else {
-                    // Client drill-down: show all services on the job
+                    // Client drill-down: show canonical service names (deduplicated)
                     const serviceLabel = items.length > 0
-                      ? items.map(it => it.name?.trim()).filter(Boolean).join(', ')
-                      : (job.title?.trim() || 'General Service');
+                      ? [...new Set(items.map(it => canonicalService(it.name)).filter(Boolean))].join(', ')
+                      : canonicalService(job.title) || 'General Service';
                     return `<tr>
                       <td class="name-cell">${job.title ?? '—'}<span style="font-size:.65rem;font-family:'DM Mono',monospace;color:var(--muted);margin-left:6px">#${job.jobNumber??''}</span></td>
                       <td style="font-size:.78rem">${serviceLabel}</td>
